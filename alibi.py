@@ -1,52 +1,34 @@
+"""Editable row: keyboard input and appearance before submitting a guess."""
+
 import pygame
+
+from beksultan import WordRow
 
 ALPHABET = "abcdefghijklmnopqrstuvwxyz"
 
 
-class InputDisplay:
-    """Game класында қолданылатын басқару және сурет салу әдістері."""
+class EditableRow(WordRow):
+    def __init__(self, index):
+        super().__init__(index)
+        self.active = False
 
     def on_key(self, event):
-        if self.over:
-            return
-        if event.key == pygame.K_RETURN:
-            self.submit()
-        elif event.key == pygame.K_BACKSPACE:
-            new = ""
-            for i in range(len(self.current) - 1):
-                new = new + self.current[i]
-            self.current = new
-        elif pygame.K_a <= event.key <= pygame.K_z:
-            if len(self.current) < 5:
-                self.current = self.current + ALPHABET[event.key - pygame.K_a]
+        """Return True when Enter submits a complete five-letter word."""
+        if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            return self.is_complete()
+        if event.key == pygame.K_BACKSPACE:
+            self.word = self.word[:-1]
+        elif pygame.K_a <= event.key <= pygame.K_z and len(self.word) < 5:
+            self.word += ALPHABET[event.key - pygame.K_a]
+        return False
 
-    def draw(self, screen, font):
-        screen.fill((15, 15, 35))
+    def is_complete(self):
+        return len(self.word) == 5
 
-        if not self.over:
-            for col in range(5):
-                tile = self.board.tile(self.row, col)
-                if col < len(self.current):
-                    tile.letter = self.current[col]
-                    tile.color = (68, 70, 84)
-                else:
-                    tile.letter = ""
-                    tile.color = (58, 60, 72)
-
-        self.board.draw(screen, font)
-
-        title = font.render("Wordly: 5 әріптік сөзді тап", True, (255, 255, 255))
-        screen.blit(title, (177, 320))
-        hint = font.render(f"Әрекет {min(self.row + 1, 6)}/6. Enter — тексеру", True, (255, 255, 255))
-        screen.blit(hint, (177, 352))
-
-        if self.over:
-            pygame.draw.rect(screen, (42, 45, 60), (90, 120, 420, 70))
-            if self.won:
-                message = "ЖЕҢІС! Жаңа ойын: R"
-                color = (106, 170, 100)
-            else:
-                message = f"Ойын бітті. Сөз: {self.secret.upper()}. R — жаңа ойын"
-                color = (201, 180, 88)
-            msg = font.render(message, True, color)
-            screen.blit(msg, (115, 145))
+    def color_at(self, column):
+        """Override the base color to highlight typed letters and the active row."""
+        if column < len(self.word):
+            return (68, 70, 84)
+        if self.active:
+            return (65, 69, 88)
+        return super().color_at(column)

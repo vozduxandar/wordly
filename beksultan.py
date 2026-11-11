@@ -1,29 +1,26 @@
+"""Common five-letter row: geometry and drawing of the game board."""
+
 import pygame
 
 
-class Tile:
-    def __init__(self, x, y):
-        self.rect = pygame.Rect(x, y, 45, 45)
-        self.letter = ""
-        self.color = (58, 60, 72)
+class WordRow:
+    """Base class shared by the editable and checked rows."""
+
+    def __init__(self, index, word=""):
+        self.index = index
+        self.word = word
+
+    def tile_rect(self, column):
+        return pygame.Rect(177 + 50 * column, 15 + 50 * self.index, 45, 45)
+
+    def color_at(self, column):
+        """Child classes decide how to color each letter."""
+        return (58, 60, 72)
 
     def draw(self, screen, font):
-        pygame.draw.rect(screen, self.color, self.rect)
-        if self.letter != "":
-            text = font.render(self.letter.upper(), True, (255, 255, 255))
-            screen.blit(text, (self.rect.x + 16, self.rect.y + 8))
-
-
-class Board:
-    def __init__(self):
-        self.tiles = []
-        for row in range(6):
-            for col in range(5):
-                self.tiles.append(Tile(177 + col * 50, 15 + row * 50))
-
-    def tile(self, row, col):
-        return self.tiles[row * 5 + col]
-
-    def draw(self, screen, font):
-        for tile in self.tiles:
-            tile.draw(screen, font)
+        for column in range(5):
+            rect = self.tile_rect(column)
+            pygame.draw.rect(screen, self.color_at(column), rect, border_radius=4)
+            if column < len(self.word):
+                letter = font.render(self.word[column].upper(), True, (255, 255, 255))
+                screen.blit(letter, letter.get_rect(center=rect.center))
