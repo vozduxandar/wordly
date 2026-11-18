@@ -2,7 +2,7 @@
 
 import pygame
 
-from beksultan import WordRow
+from word_row import WordRow
 
 ALPHABET = "abcdefghijklmnopqrstuvwxyz"
 
