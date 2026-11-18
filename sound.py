@@ -1,4 +1,4 @@
-"""Load the lesson's short effects once; play user-supplied music if present."""
+"""Play the original Wordly soundtrack and short synthesized effects."""
 
 from pathlib import Path
 
@@ -15,19 +15,20 @@ class Sound:
         self.enabled = True
         if not self.available:
             return
-        for name in ("catch", "hit", "over"):
-            self.effects[name] = pygame.mixer.Sound(str(ASSETS / f"{name}.wav"))
+        for name, filename in (
+            ("catch", "effect_submit.wav"),
+            ("hit", "effect_invalid.wav"),
+            ("over", "effect_end.wav"),
+        ):
+            self.effects[name] = pygame.mixer.Sound(str(ASSETS / filename))
 
-        for name in ("music.ogg", "music.wav"):
-            path = ASSETS / name
-            if path.is_file():
-                try:
-                    pygame.mixer.music.load(str(path))
-                except (pygame.error, OSError) as error:
-                    print(f"Could not load {path}: {error}")
-                else:
-                    self.music_available = True
-                    break
+        path = ASSETS / "music_original.wav"
+        try:
+            pygame.mixer.music.load(str(path))
+        except (pygame.error, OSError) as error:
+            print(f"Could not load {path}: {error}")
+        else:
+            self.music_available = True
 
     def play(self, name):
         if self.enabled and name in self.effects:

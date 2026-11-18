@@ -50,6 +50,7 @@ class Game:
     def __init__(self, secret=None, sound=None):
         self.sound = sound
         self.level = 1
+        self.score = 0
         self.secret = secret if secret is not None else random.choice(WORDS)
         self.remaining_words = [word for word in WORDS if word != self.secret]
         self.font_choices = available_fonts()
@@ -62,8 +63,8 @@ class Game:
         self.start_button = pygame.Rect(160, 215, 280, 46)
         self.font_button = pygame.Rect(110, 276, 180, 44)
         self.sound_button = pygame.Rect(310, 276, 180, 44)
-        self.action_button = pygame.Rect(78, 222, 210, 46)
-        self.menu_button = pygame.Rect(312, 222, 210, 46)
+        self.action_button = pygame.Rect(78, 235, 210, 46)
+        self.menu_button = pygame.Rect(312, 235, 210, 46)
         self.focus = 0
         self.now = pygame.time.get_ticks()
         self.state = "start"
@@ -74,6 +75,9 @@ class Game:
     def has_audio(self):
         return self.sound is not None and self.sound.available
 
+    def can_change_font(self):
+        return len(self.font_choices) > 1
+
     def set_fonts(self):
         path = self.font_choices[self.font_index][1]
         self.title_font = pygame.font.Font(path, 36)
@@ -82,14 +86,18 @@ class Game:
         self.small_font = pygame.font.Font(path, 18)
 
     def change_font(self, step=1):
+        if not self.can_change_font():
+            return
         self.font_index = (self.font_index + step) % len(self.font_choices)
         self.set_fonts()
         self.menu_word.set_font(self.tile_font)
 
     def _reset_board(self):
         self.rows = [EditableRow(index) for index in range(6)]
+        self.row_sprites = pygame.sprite.Group(self.rows)
         self.rows[0].active = True
         self.row = 0
+        self.round_score = 0
         self.over = False
         self.won = False
         self.revealing = False
@@ -108,7 +116,16 @@ class Game:
             return
         if self.won:
             self._advance_level()
+        else:
+            self._new_game()
         self.start()
+
+    def _new_game(self):
+        previous = self.secret
+        self.secret = random.choice([word for word in WORDS if word != previous])
+        self.remaining_words = [word for word in WORDS if word != self.secret]
+        self.level = 1
+        self.score = 0
 
     def _advance_level(self):
         previous = self.secret
@@ -119,8 +136,11 @@ class Game:
         self.level += 1
 
     def back_to_menu(self):
-        if self.state == "over" and self.won:
-            self._advance_level()
+        if self.state == "over":
+            if self.won:
+                self._advance_level()
+            else:
+                self._new_game()
         self._reset_board()
         self.state = "start"
         self.focus = 0
@@ -130,9 +150,9 @@ class Game:
         if self.state == "start":
             if self.focus == 0:
                 self.start()
-            elif self.focus == 1:
+            elif self.focus == 1 and self.can_change_font():
                 self.change_font()
-            elif self.has_audio():
+            elif self.focus == 2 and self.has_audio():
                 self.sound.toggle()
         elif self.state == "over":
             if self.focus == 0:
@@ -151,7 +171,10 @@ class Game:
             elif not self.revealing:
                 editable = self.rows[self.row]
                 if editable.on_key(event):
-                    self.rows[self.row] = CheckedRow(self.row, editable.word, self.secret)
+                    checked = CheckedRow(self.row, editable.word, self.secret)
+                    self.row_sprites.remove(editable)
+                    self.rows[self.row] = checked
+                    self.row_sprites.add(checked)
                     self.revealing = True
                     if self.sound:
                         self.sound.play("catch")
@@ -163,14 +186,21 @@ class Game:
 
         if event.key == pygame.K_TAB:
             step = -1 if event.mod & pygame.KMOD_SHIFT else 1
-            count = 3 if self.state == "start" and self.has_audio() else 2
-            self.focus = (self.focus + step) % count
+            if self.state == "start":
+                choices = [0]
+                if self.can_change_font():
+                    choices.append(1)
+                if self.has_audio():
+                    choices.append(2)
+            else:
+                choices = [0, 1]
+            self.focus = choices[(choices.index(self.focus) + step) % len(choices)]
         elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
             self._activate()
         elif self.state == "start":
             if event.key == pygame.K_ESCAPE:
                 return True
-            if self.focus == 1 and event.key in (pygame.K_LEFT, pygame.K_RIGHT):
+            if self.focus == 1 and self.can_change_font() and event.key in (pygame.K_LEFT, pygame.K_RIGHT):
                 self.change_font(-1 if event.key == pygame.K_LEFT else 1)
         elif self.state == "over":
             if event.key == pygame.K_r:
@@ -181,17 +211,31 @@ class Game:
                 self.focus = 1 - self.focus
         return False
 
+    def hovered_tile(self, position):
+        if self.state != "play" or self.revealing:
+            return None
+        editable = self.rows[self.row]
+        pointer = pygame.Rect(position, (1, 1))
+        for column in range(len(editable.word)):
+            if pointer.colliderect(editable.tile_rect(column)):
+                return column
+        return None
+
     def on_click(self, position):
         if self.state == "start":
             if self.start_button.collidepoint(position):
                 self.focus = 0
                 self.start()
-            elif self.font_button.collidepoint(position):
+            elif self.font_button.collidepoint(position) and self.can_change_font():
                 self.focus = 1
                 self.change_font()
             elif self.sound_button.collidepoint(position) and self.has_audio():
                 self.focus = 2
                 self.sound.toggle()
+        elif self.state == "play":
+            column = self.hovered_tile(position)
+            if column is not None:
+                self.rows[self.row].erase_at(column)
         elif self.state == "over":
             if self.action_button.collidepoint(position):
                 self.focus = 0
@@ -214,6 +258,9 @@ class Game:
                     self.over = True
                     self.state = "over"
                     self.focus = 0
+                    if self.won:
+                        self.round_score = 6 - self.row
+                        self.score += self.round_score
                     color = GREEN if self.won else GRAY
                     for column in range(5):
                         for _ in range(3):
@@ -252,7 +299,7 @@ class Game:
             self._button(
                 screen, self.font_button,
                 f"Қаріп: {self.font_choices[self.font_index][0]}", False, self.focus == 1,
-                font=self.small_font,
+                font=self.small_font, enabled=self.can_change_font(),
             )
             label = (
                 "Дыбыс: қосулы" if self.sound.enabled else "Дыбыс: өшірулі"
@@ -266,11 +313,14 @@ class Game:
             return
 
         self._center(screen, f"Wordly  ·  {self.level}-деңгей", 23, self.text_font)
+        hovered = self.hovered_tile(pygame.mouse.get_pos())
         for row in self.rows:
-            row.draw(screen, self.tile_font)
+            row.render(self.tile_font, hovered if row is self.rows[self.row] else None)
+        self.row_sprites.draw(screen)
         self.effects.draw(screen)
         hint = (
             "5 әріп жазыңыз" if self.notice_until > self.now else
+            "Ұяшықты бассаңыз, әріп өшеді" if hovered is not None else
             f"Әрекет {self.row + 1}/6  ·  Enter: тексеру  ·  F1: қаріп  ·  Esc: мәзір"
         )
         self._center(screen, hint, 373, self.small_font, MUTED)
@@ -279,17 +329,21 @@ class Game:
             shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             shade.fill((0, 0, 0, 175))
             screen.blit(shade, (0, 0))
-            pygame.draw.rect(screen, PANEL, (58, 100, 484, 210), border_radius=6)
+            pygame.draw.rect(screen, PANEL, (58, 94, 484, 221), border_radius=6)
             title = f"{self.level}-деңгей: Жеңіс!" if self.won else f"{self.level}-деңгей: Мүмкіндік бітті"
-            self._center(screen, title, 139, self.text_font)
+            self._center(screen, title, 128, self.text_font)
             word = "Табылған сөз" if self.won else "Жасырын сөз"
-            self._center(screen, f"{word}: {self.secret.upper()}", 183, self.text_font)
+            self._center(screen, f"{word}: {self.secret.upper()}", 167, self.text_font)
+            self._center(
+                screen, f"Осы раунд: {self.round_score} ұпай  ·  Барлығы: {self.score}",
+                205, self.small_font, MUTED,
+            )
             self._button(
                 screen, self.action_button,
-                "Келесі деңгей" if self.won else "Қайталау", True, self.focus == 0,
+                "Келесі деңгей" if self.won else "Жаңа ойын", True, self.focus == 0,
             )
             self._button(screen, self.menu_button, "Мәзір", False, self.focus == 1)
-            self._center(screen, "R: жалғастыру  ·  M: мәзір  ·  F1: қаріп", 292, self.small_font, MUTED)
+            self._center(screen, "R: жалғастыру  ·  M: мәзір  ·  F1: қаріп", 299, self.small_font, MUTED)
 
 
 def main():

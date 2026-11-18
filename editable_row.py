@@ -25,6 +25,10 @@ class EditableRow(WordRow):
     def is_complete(self):
         return len(self.word) == 5
 
+    def erase_at(self, column):
+        if 0 <= column < len(self.word):
+            self.word = self.word[:column] + self.word[column + 1:]
+
     def color_at(self, column):
         """Override the base color to highlight typed letters and the active row."""
         if column < len(self.word):

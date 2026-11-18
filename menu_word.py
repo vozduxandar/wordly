@@ -2,6 +2,8 @@
 
 import pygame
 
+from word_row import WordRow
+
 
 class MenuWord(pygame.sprite.Sprite):
     def __init__(self, word, center, font):
@@ -13,13 +15,13 @@ class MenuWord(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=center)
 
     def set_font(self, font):
+        tiles = WordRow.tile_images()
         self.frames = []
         for count in range(6):
             image = pygame.Surface((245, 45), pygame.SRCALPHA)
             for i, letter in enumerate(self.word):
-                color = (68, 70, 84) if i < count else (58, 60, 72)
                 rect = pygame.Rect(i * 50, 0, 45, 45)
-                pygame.draw.rect(image, color, rect, border_radius=4)
+                image.blit(tiles["typed" if i < count else "idle"], rect)
                 if i < count:
                     glyph = font.render(letter, True, (255, 255, 255))
                     image.blit(glyph, glyph.get_rect(center=rect.center))
